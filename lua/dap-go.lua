@@ -12,13 +12,27 @@ local default_config = {
   },
 }
 
-local tests_query = [[
+local run_suite_query = [[
 (function_declaration
   name: (identifier) @testname
   parameters: (parameter_list
     . (parameter_declaration
       type: (pointer_type) @type) .)
+  body: (block
+    (call_expression
+      function: (selector_expression
+        operand: (identifier) @testoperand
+        field: (field_identifier) @testfield)))
   (#match? @type "*testing.(T|M)")
+  (#match? @testname "^Test.+$")
+  (#match? @testoperand "suite")
+  (#match? @testfield "Run")
+  ) @parent
+]]
+
+local tests_query = [[
+(method_declaration
+  name: (field_identifier) @testname
   (#match? @testname "^Test.+$")) @parent
 ]]
 
@@ -142,7 +156,7 @@ local function debug_test(testname, testpath)
     request = "launch",
     mode = "test",
     program = testpath,
-    args = { "-test.run", testname },
+    args = { "-testify.m", testname },
   })
 end
 
@@ -214,22 +228,22 @@ local function get_closest_test()
     table.insert(test_tree, test_match)
   end
 
-  local subtest_query = vim.treesitter.parse_query(ft, subtests_query)
-  assert(subtest_query, "dap-go error: could not parse test query")
-  for _, match, _ in subtest_query:iter_matches(root, 0, 0, stop_row) do
-    local test_match = {}
-    for id, node in pairs(match) do
-      local capture = subtest_query.captures[id]
-      if capture == "testname" then
-        local name = query.get_node_text(node, 0)
-        test_match.name = string.gsub(string.gsub(name, " ", "_"), '"', "")
-      end
-      if capture == "parent" then
-        test_match.node = node
-      end
-    end
-    table.insert(test_tree, test_match)
-  end
+  -- local subtest_query = vim.treesitter.parse_query(ft, subtests_query)
+  -- assert(subtest_query, "dap-go error: could not parse test query")
+  -- for _, match, _ in subtest_query:iter_matches(root, 0, 0, stop_row) do
+  --   local test_match = {}
+  --   for id, node in pairs(match) do
+  --     local capture = subtest_query.captures[id]
+  --     if capture == "testname" then
+  --       local name = query.get_node_text(node, 0)
+  --       test_match.name = string.gsub(string.gsub(name, " ", "_"), '"', "")
+  --     end
+  --     if capture == "parent" then
+  --       test_match.node = node
+  --     end
+  --   end
+  --   table.insert(test_tree, test_match)
+  -- end
 
   table.sort(test_tree, function(a, b)
     return is_parent(a.node, b.node)
